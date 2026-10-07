@@ -30,7 +30,7 @@
     <span id="syncStatus" class="meta">☁️ Conectando...</span>
   </div>
   <div style="display:flex;gap:8px">
-    <button type="button" class="btn secondary" onclick="syncNow()">🔄 Sincronizar</button><button type="button" class="btn secondary" onclick="clearLocalCache()">🧹 Limpar este aparelho</button>
+    <button type="button" class="btn secondary" onclick="syncNow()">🔄 Sincronizar</button><button type="button" class="btn secondary" onclick="clearLocalCache()">🧹 Limpar aparelho e nuvem</button>
     <button type="button" class="btn red" onclick="logout()">Sair</button>
   </div>
 </div>
@@ -350,25 +350,77 @@ async function syncNow(){
     toast('Não foi possível sincronizar: '+e.message);
   }
 }
-function clearLocalCache(){
-  if(!confirm('Isso vai apagar somente os dados deste aparelho. Os dados da sua conta na nuvem NÃO serão apagados. Continuar?'))return;
+async function clearLocalCache(){
+  if(!confirm('Isso vai apagar TODOS os dados desta conta, tanto deste aparelho quanto da nuvem. Esta ação não pode ser desfeita. Continuar?'))return;
 
-  // Do not call save() or cloudSave() here.
-  // This operation is local to this browser/device.
-  localStorage.removeItem(LS);
+  // Mesmo comportamento do botão "Apagar tudo":
+  // apaga primeiro na nuvem e depois no aparelho.
+  if(!currentUser){
+    state={
+      entries:[],
+      bills:[],
+      cats:['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros'],
+      planning:{
+        investment:{target:0,current:0,monthly:0,deadline:''},
+        emergency:{target:0,current:0,monthly:0,deadline:''}
+      }
+    };
+    localStorage.setItem(LS,JSON.stringify(state));
+    renderAll();
+    toast('Dados apagados deste aparelho');
+    return;
+  }
 
-  state={
-    entries:[],
-    bills:[],
-    cats:['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros'],
-    planning:{
-      investment:{target:0,current:0,monthly:0,deadline:''},
-      emergency:{target:0,current:0,monthly:0,deadline:''}
-    }
-  };
+  if(syncBusy){
+    toast('Aguarde a operação atual terminar.');
+    return;
+  }
 
-  renderAll();
-  toast('Dados locais apagados. A nuvem não foi alterada.');
+  try{
+    syncBusy=true;
+    setSyncStatus('Apagando...',false);
+    const uidv=currentUser.id;
+
+    const e=await window.financeSupabase
+      .from('finance_entries')
+      .delete()
+      .eq('user_id',uidv);
+    if(e.error)throw new Error('Lançamentos: '+e.error.message);
+
+    const b=await window.financeSupabase
+      .from('finance_bills')
+      .delete()
+      .eq('user_id',uidv);
+    if(b.error)throw new Error('Contas: '+b.error.message);
+
+    const s=await window.financeSupabase
+      .from('finance_settings')
+      .delete()
+      .eq('user_id',uidv);
+    if(s.error)throw new Error('Configurações: '+s.error.message);
+
+    state={
+      entries:[],
+      bills:[],
+      cats:['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros'],
+      planning:{
+        investment:{target:0,current:0,monthly:0,deadline:''},
+        emergency:{target:0,current:0,monthly:0,deadline:''}
+      }
+    };
+
+    localStorage.setItem(LS,JSON.stringify(state));
+    renderAll();
+    cloudReady=true;
+    setSyncStatus('Sincronizado — vazio',true);
+    toast('Todos os dados foram apagados');
+  }catch(e){
+    console.error('CLEAR LOCAL/CLOUD ERROR',e);
+    setSyncStatus('Erro ao apagar',false);
+    toast('Não foi possível apagar: '+e.message);
+  }finally{
+    syncBusy=false;
+  }
 }
 async function enterApp(u){
   currentUser=u;
