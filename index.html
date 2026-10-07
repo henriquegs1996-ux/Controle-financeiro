@@ -179,10 +179,11 @@
 </form></div></div>
 <div id="toast" class="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL='https://qtjfsrqkwtkpapqknikt.supabase.co';
 const SUPABASE_KEY='sb_publishable_Os-1E8BDOH1GtXT8E4I7Pg_AerAvOVN';
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+window.financeSupabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 let user=null,cloudReady=false;
 function authMessage(t,ok=false){const e=document.getElementById('authMsg');if(e){e.textContent=t;e.style.color=ok?'#15956a':'#d84a4a'}}
 async function login(){const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;if(!email||!password)return authMessage('Digite o e-mail e a senha.');authMessage('Entrando...',true);try{const r=await sb.auth.signInWithPassword({email,password});if(r.error)return authMessage('Erro ao entrar: '+r.error.message);if(r.data?.session)await enterApp(r.data.session.user)}catch(e){authMessage('Não foi possível entrar: '+(e?.message||e))}}
