@@ -30,7 +30,7 @@
     <span id="syncStatus" class="meta">☁️ Conectando...</span>
   </div>
   <div style="display:flex;gap:8px">
-    <button type="button" class="btn secondary" onclick="syncNow()">🔄 Sincronizar</button>
+    <button type="button" class="btn secondary" onclick="syncNow()">🔄 Sincronizar</button><button type="button" class="btn secondary" onclick="clearLocalCache()">🧹 Limpar aparelho</button>
     <button type="button" class="btn red" onclick="logout()">Sair</button>
   </div>
 </div>
@@ -263,22 +263,22 @@ async function loadCloud(){
   if(br.error)throw new Error('Contas: '+br.error.message);
   if(sr.error)throw new Error('Configurações: '+sr.error.message);
 
-  const hasCloud=(er.data&&er.data.length>0)||(br.data&&br.data.length>0)||!!sr.data;
-  if(hasCloud){
-    state.entries=(er.data||[]).map(x=>({
-      id:x.id,type:x.type,value:+x.value||0,desc:x.description||x.desc||'',
-      cat:x.category||x.cat||'Outros',date:x.date,status:x.status||'paid',method:x.method||''
-    }));
-    state.bills=(br.data||[]).map(x=>({
-      id:x.id,type:x.type,value:+x.value||0,desc:x.description||x.desc||'',
-      cat:x.category||x.cat||'Outros',date:x.date,status:x.status||'pending',method:x.method||''
-    }));
-    if(sr.data){
-      if(Array.isArray(sr.data.cats))state.cats=sr.data.cats;
-      if(sr.data.planning)state.planning=sr.data.planning;
-    }
-    localStorage.setItem(LS,JSON.stringify(state));
+  state.entries=(er.data||[]).map(x=>({
+    id:x.id,type:x.type,value:+x.value||0,desc:x.description||x.desc||'',
+    cat:x.category||x.cat||'Outros',date:x.date,status:x.status||'paid',method:x.method||''
+  }));
+  state.bills=(br.data||[]).map(x=>({
+    id:x.id,type:x.type,value:+x.value||0,desc:x.description||x.desc||'',
+    cat:x.category||x.cat||'Outros',date:x.date,status:x.status||'pending',method:x.method||''
+  }));
+  if(sr.data){
+    if(Array.isArray(sr.data.cats))state.cats=sr.data.cats;
+    if(sr.data.planning)state.planning=sr.data.planning;
+  }else{
+    state.cats=['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros'];
+    if(!state.planning)state.planning={investment:{target:0,current:0,monthly:0,deadline:''},emergency:{target:0,current:0,monthly:0,deadline:''}};
   }
+  localStorage.setItem(LS,JSON.stringify(state));
   cloudReady=true;
   renderAll();
   setSyncStatus('Sincronizado',true);
@@ -346,6 +346,11 @@ async function syncNow(){
     toast('Não foi possível sincronizar: '+e.message);
   }
 }
+async function clearLocalCache(){
+  if(!confirm('Isso vai apagar somente os dados salvos neste navegador e recarregar os dados da nuvem. Continuar?'))return;
+  localStorage.removeItem(LS);
+  location.reload();
+}
 async function enterApp(u){
   currentUser=u;
   document.getElementById('authScreen').style.display='none';
@@ -379,7 +384,7 @@ let state=JSON.parse(localStorage.getItem(LS)||'null')||{entries:[],bills:[],cat
 if(!state.planning) state.planning={investment:{target:0,current:0,monthly:0,deadline:''},emergency:{target:0,current:0,monthly:0,deadline:''}};
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0);
 const today=()=>new Date().toISOString().slice(0,10);
-function save(){localSave();cloudSave()}
+function save(){localSave();if(currentUser&&cloudReady)cloudSave()}
 function months(){let a=[],n=new Date();for(let i=0;i<12;i++){let d=new Date(n.getFullYear(),n.getMonth()-i,1),k=d.toISOString().slice(0,7);a.push([k,d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})])}return a}
 function fillMonths(){['dashMonth','reportMonth'].forEach(id=>{let e=document.getElementById(id);e.innerHTML=months().map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');e.value=months()[0][0]})}
 function fillCats(){let opts=state.cats.map(x=>`<option>${x}</option>`).join('');document.getElementById('cat').innerHTML=opts;document.getElementById('filterCat').innerHTML='<option value="">Todas as categorias</option>'+opts}
