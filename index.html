@@ -23,6 +23,18 @@
   </div>
 </div>
 <div id="app" class="app" style="display:none">
+<div id="accountBar" style="position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid #e5e9f0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+  <div style="display:flex;align-items:center;gap:10px;min-width:0">
+    <span style="font-size:13px;font-weight:700">Conta</span>
+    <span id="topAccountEmail" class="meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px"></span>
+    <span id="syncStatus" class="meta">☁️ Conectando...</span>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button type="button" class="btn secondary" onclick="syncNow()">🔄 Sincronizar</button>
+    <button type="button" class="btn red" onclick="logout()">Sair</button>
+  </div>
+</div>
+
 <aside class="sidebar">
 <div class="brand">💰 Meu Financeiro <small>Controle financeiro pessoal</small></div>
 <nav class="nav">
@@ -156,7 +168,7 @@
 <div class="panel"><h2>♻️ Restaurar</h2><p class="meta">Importe um backup feito neste sistema.</p><input id="restore" type="file" accept=".json" class="input"></div>
 <div class="panel"><h2>🗑️ Dados</h2><p class="meta">Apaga lançamentos, contas e categorias.</p><button class="btn red" onclick="clearAll()">Apagar tudo</button></div>
 </div>
-<div class="panel" style="margin-top:16px"><h2>Sobre esta versão</h2><p class="meta">Versão 2 local. Os dados ficam salvos neste navegador. A próxima etapa pode conectar login e banco de dados online.</p></div>
+<div class="panel" style="margin-top:16px"><h2>Sobre esta versão</h2><p class="meta">Versão online com login e sincronização em nuvem. Seus dados podem ser acessados no computador e no celular usando a mesma conta.</p></div>
 </section>
 </main>
 
@@ -182,69 +194,184 @@
 <script>
 const SUPABASE_URL='https://qtjfsrqkwtkpapqknikt.supabase.co';
 const SUPABASE_KEY='sb_publishable_Os-1E8BDOH1GtXT8E4I7Pg_AerAvOVN';
-window.financeSupabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+window.financeSupabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
+  auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
+});
 let currentUser=null;
 let cloudReady=false;
+let syncBusy=false;
 
+function setSyncStatus(text,ok=true){
+  const e=document.getElementById('syncStatus');
+  if(e){e.textContent=(ok?'☁️ ':'⚠️ ')+text;e.style.color=ok?'#15956a':'#d84a4a';}
+}
+function authMessage(t,error=true){
+  const e=document.getElementById('authMsg');
+  if(e){e.textContent=t;e.style.color=error?'#d84a4a':'#15956a';}
+}
+function uid(){
+  return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2));
+}
+function normalizeStateIds(){
+  state.entries.forEach(x=>{if(!x.id || String(x.id).length<20)x.id=uid()});
+  state.bills.forEach(x=>{if(!x.id || String(x.id).length<20)x.id=uid()});
+}
+function localSave(){
+  localStorage.setItem(LS,JSON.stringify(state));
+  renderAll();
+}
 async function login(){
- const email=document.getElementById('authEmail').value.trim(); const password=document.getElementById('authPassword').value;
- if(!email||!password){document.getElementById('authMsg').textContent='Informe e-mail e senha.';return;}
- authMessage('Entrando...',false);
- const {data,error}=await window.financeSupabase.auth.signInWithPassword({email,password});
- if(error){authMessage('Não foi possível entrar: '+error.message,true);return;}
- await enterApp(data.user);
+  const email=document.getElementById('authEmail').value.trim();
+  const password=document.getElementById('authPassword').value;
+  if(!email||!password){authMessage('Informe e-mail e senha.');return;}
+  authMessage('Entrando...',false);
+  const {data,error}=await window.financeSupabase.auth.signInWithPassword({email,password});
+  if(error){authMessage('Não foi possível entrar: '+error.message,true);return;}
+  if(data.user) await enterApp(data.user);
 }
 async function signup(){
- const email=document.getElementById('authEmail').value.trim(); const password=document.getElementById('authPassword').value;
- if(!email||!password){authMessage('Informe e-mail e senha.',true);return;}
- if(password.length<6){authMessage('A senha precisa ter pelo menos 6 caracteres.',true);return;}
- authMessage('Criando conta...',false);
- const {data,error}=await window.financeSupabase.auth.signUp({email,password});
- if(error){authMessage('Não foi possível criar a conta: '+error.message,true);return;}
- if(data.session&&data.user){await enterApp(data.user);}else{authMessage('Conta criada. Confirme o e-mail se o Supabase solicitar e depois entre.',false);}
+  const email=document.getElementById('authEmail').value.trim();
+  const password=document.getElementById('authPassword').value;
+  if(!email||!password){authMessage('Informe e-mail e senha.');return;}
+  if(password.length<6){authMessage('A senha precisa ter pelo menos 6 caracteres.');return;}
+  authMessage('Criando conta...',false);
+  const {data,error}=await window.financeSupabase.auth.signUp({email,password});
+  if(error){authMessage('Não foi possível criar a conta: '+error.message,true);return;}
+  if(data.session&&data.user) await enterApp(data.user);
+  else authMessage('Conta criada. Confirme o e-mail se solicitado e depois entre.',false);
 }
-async function logout(){await window.financeSupabase.auth.signOut(); currentUser=null; cloudReady=false; document.getElementById('app').style.display='none'; document.getElementById('authScreen').style.display='flex'; document.getElementById('authMsg').textContent='';}
-function authMessage(t,error=true){const e=document.getElementById('authMsg');e.textContent=t;e.style.color=error?'#d84a4a':'#15956a';}
-function uid(){return crypto.randomUUID?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2));}
-function normalizeStateIds(){state.entries.forEach(x=>{if(!String(x.id).includes('-'))x.id=uid()});state.bills.forEach(x=>{if(!String(x.id).includes('-'))x.id=uid()});}
+async function logout(){
+  try{await window.financeSupabase.auth.signOut();}
+  finally{
+    currentUser=null;cloudReady=false;
+    document.getElementById('app').style.display='none';
+    document.getElementById('authScreen').style.display='flex';
+    document.getElementById('authEmail').focus();
+    setSyncStatus('Desconectado',false);
+  }
+}
 async function loadCloud(){
- if(!currentUser)return;
- const [er,br,sr]=await Promise.all([
-  window.financeSupabase.from('finance_entries').select('*').eq('user_id',currentUser.id),
-  window.financeSupabase.from('finance_bills').select('*').eq('user_id',currentUser.id),
-  window.financeSupabase.from('finance_settings').select('*').eq('user_id',currentUser.id).maybeSingle()
- ]);
- if(er.error)throw er.error; if(br.error)throw br.error; if(sr.error)throw sr.error;
- const hasCloud=(er.data&&er.data.length)||(br.data&&br.data.length)||sr.data;
- if(hasCloud){
-  state.entries=(er.data||[]).map(x=>({id:x.id,type:x.type,value:+x.value||0,desc:x.description||x.desc||'',cat:x.category||x.cat||'Outros',date:x.date,status:x.status||'paid',method:x.method||''}));
-  state.bills=(br.data||[]).map(x=>({id:x.id,type:x.type,value:+x.value||0,desc:x.description||x.desc||'',cat:x.category||x.cat||'Outros',date:x.date,status:x.status||'pending',method:x.method||''}));
-  if(sr.data){if(Array.isArray(sr.data.cats))state.cats=sr.data.cats;if(sr.data.planning)state.planning=sr.data.planning;}
-  localStorage.setItem(LS,JSON.stringify(state));
- }
- cloudReady=true; renderAll();
+  if(!currentUser)return;
+  setSyncStatus('Carregando...',false);
+  const uidv=currentUser.id;
+  const [er,br,sr]=await Promise.all([
+    window.financeSupabase.from('finance_entries').select('*').eq('user_id',uidv),
+    window.financeSupabase.from('finance_bills').select('*').eq('user_id',uidv),
+    window.financeSupabase.from('finance_settings').select('*').eq('user_id',uidv).maybeSingle()
+  ]);
+  if(er.error)throw new Error('Lançamentos: '+er.error.message);
+  if(br.error)throw new Error('Contas: '+br.error.message);
+  if(sr.error)throw new Error('Configurações: '+sr.error.message);
+
+  const hasCloud=(er.data&&er.data.length>0)||(br.data&&br.data.length>0)||!!sr.data;
+  if(hasCloud){
+    state.entries=(er.data||[]).map(x=>({
+      id:x.id,type:x.type,value:+x.value||0,desc:x.description||x.desc||'',
+      cat:x.category||x.cat||'Outros',date:x.date,status:x.status||'paid',method:x.method||''
+    }));
+    state.bills=(br.data||[]).map(x=>({
+      id:x.id,type:x.type,value:+x.value||0,desc:x.description||x.desc||'',
+      cat:x.category||x.cat||'Outros',date:x.date,status:x.status||'pending',method:x.method||''
+    }));
+    if(sr.data){
+      if(Array.isArray(sr.data.cats))state.cats=sr.data.cats;
+      if(sr.data.planning)state.planning=sr.data.planning;
+    }
+    localStorage.setItem(LS,JSON.stringify(state));
+  }
+  cloudReady=true;
+  renderAll();
+  setSyncStatus('Sincronizado',true);
 }
 async function cloudSave(){
- if(!currentUser||!cloudReady)return;
- try{
-  normalizeStateIds();
-  const uidv=currentUser.id;
-  const entries=state.entries.map(x=>({id:String(x.id),user_id:uidv,type:x.type,value:x.value,description:x.desc,category:x.cat,date:x.date,status:x.status,method:x.method||''}));
-  const bills=state.bills.map(x=>({id:String(x.id),user_id:uidv,type:x.type,value:x.value,description:x.desc,category:x.cat,date:x.date,status:x.status,method:x.method||''}));
-  const d1=await window.financeSupabase.from('finance_entries').delete().eq('user_id',uidv); if(d1.error)throw d1.error;
-  const d2=await window.financeSupabase.from('finance_bills').delete().eq('user_id',uidv); if(d2.error)throw d2.error;
-  if(entries.length){const x=await window.financeSupabase.from('finance_entries').insert(entries);if(x.error)throw x.error;}
-  if(bills.length){const x=await window.financeSupabase.from('finance_bills').insert(bills);if(x.error)throw x.error;}
-  const x=await window.financeSupabase.from('finance_settings').upsert({user_id:uidv,cats:state.cats,planning:state.planning,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(x.error)throw x.error;
- }catch(e){console.error(e);toast('Erro ao sincronizar: '+e.message);}
+  if(!currentUser||!cloudReady||syncBusy)return;
+  syncBusy=true;
+  try{
+    normalizeStateIds();
+    localStorage.setItem(LS,JSON.stringify(state));
+    setSyncStatus('Salvando...',false);
+    const uidv=currentUser.id;
+    const entries=state.entries.map(x=>({
+      id:String(x.id),user_id:uidv,type:x.type,value:Number(x.value)||0,
+      description:x.desc||'',category:x.cat||'Outros',date:x.date,
+      status:x.status||'paid',method:x.method||''
+    }));
+    const bills=state.bills.map(x=>({
+      id:String(x.id),user_id:uidv,type:x.type,value:Number(x.value)||0,
+      description:x.desc||'',category:x.cat||'Outros',date:x.date,
+      status:x.status||'pending',method:x.method||''
+    }));
+
+    const d1=await window.financeSupabase.from('finance_entries').delete().eq('user_id',uidv);
+    if(d1.error)throw new Error('Lançamentos: '+d1.error.message);
+    const d2=await window.financeSupabase.from('finance_bills').delete().eq('user_id',uidv);
+    if(d2.error)throw new Error('Contas: '+d2.error.message);
+
+    if(entries.length){
+      const x=await window.financeSupabase.from('finance_entries').insert(entries);
+      if(x.error)throw new Error('Lançamentos: '+x.error.message);
+    }
+    if(bills.length){
+      const x=await window.financeSupabase.from('finance_bills').insert(bills);
+      if(x.error)throw new Error('Contas: '+x.error.message);
+    }
+
+    const settings={
+      user_id:uidv,
+      cats:Array.isArray(state.cats)?state.cats:[],
+      planning:state.planning||{},
+      updated_at:new Date().toISOString()
+    };
+    const x=await window.financeSupabase.from('finance_settings')
+      .upsert(settings,{onConflict:'user_id'});
+    if(x.error)throw new Error('Configurações/categorias: '+x.error.message);
+
+    setSyncStatus('Sincronizado',true);
+  }catch(e){
+    console.error('SYNC ERROR',e);
+    setSyncStatus('Erro de sincronização',false);
+    toast('Erro ao sincronizar: '+e.message);
+  }finally{
+    syncBusy=false;
+  }
+}
+async function syncNow(){
+  if(!currentUser){authMessage('Entre na sua conta primeiro.');return;}
+  try{
+    await loadCloud();
+    toast('Sincronização concluída');
+  }catch(e){
+    console.error(e);
+    setSyncStatus('Erro de sincronização',false);
+    toast('Não foi possível sincronizar: '+e.message);
+  }
 }
 async function enterApp(u){
- currentUser=u; document.getElementById('authScreen').style.display='none'; document.getElementById('app').style.display='block'; document.getElementById('accountEmail').textContent=u.email||'';
- try{await loadCloud();}catch(e){console.error(e);cloudReady=false;authMessage('',false);toast('Não foi possível carregar os dados da nuvem: '+e.message);renderAll();}
+  currentUser=u;
+  document.getElementById('authScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  const email=u.email||'';
+  document.getElementById('accountEmail').textContent=email;
+  const top=document.getElementById('topAccountEmail');
+  if(top)top.textContent=email;
+  try{
+    await loadCloud();
+  }catch(e){
+    console.error(e);
+    cloudReady=false;
+    setSyncStatus('Falha ao carregar',false);
+    toast('Não foi possível carregar a nuvem: '+e.message);
+    renderAll();
+  }
 }
 window.financeSupabase.auth.onAuthStateChange(async (_event,session)=>{
- if(session&&session.user){if(!currentUser||currentUser.id!==session.user.id)await enterApp(session.user);}
- else if(!session){currentUser=null;cloudReady=false;document.getElementById('app').style.display='none';document.getElementById('authScreen').style.display='flex';}
+  if(session&&session.user){
+    if(!currentUser||currentUser.id!==session.user.id)await enterApp(session.user);
+  }else{
+    currentUser=null;cloudReady=false;
+    document.getElementById('app').style.display='none';
+    document.getElementById('authScreen').style.display='flex';
+  }
 });
 
 const LS='finance_v2_data';
@@ -252,7 +379,7 @@ let state=JSON.parse(localStorage.getItem(LS)||'null')||{entries:[],bills:[],cat
 if(!state.planning) state.planning={investment:{target:0,current:0,monthly:0,deadline:''},emergency:{target:0,current:0,monthly:0,deadline:''}};
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0);
 const today=()=>new Date().toISOString().slice(0,10);
-function save(){localStorage.setItem(LS,JSON.stringify(state));renderAll();cloudSave()}
+function save(){localSave();cloudSave()}
 function months(){let a=[],n=new Date();for(let i=0;i<12;i++){let d=new Date(n.getFullYear(),n.getMonth()-i,1),k=d.toISOString().slice(0,7);a.push([k,d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})])}return a}
 function fillMonths(){['dashMonth','reportMonth'].forEach(id=>{let e=document.getElementById(id);e.innerHTML=months().map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');e.value=months()[0][0]})}
 function fillCats(){let opts=state.cats.map(x=>`<option>${x}</option>`).join('');document.getElementById('cat').innerHTML=opts;document.getElementById('filterCat').innerHTML='<option value="">Todas as categorias</option>'+opts}
@@ -381,7 +508,20 @@ function toast(t){toastEl.textContent=t;toastEl.style.display='block';setTimeout
 const toastEl=document.getElementById('toast');
 ['dashMonth','reportMonth','search','filterType','filterCat','filterDate','billFilter'].forEach(id=>document.getElementById(id).addEventListener('input',renderAll));
 fillMonths();document.getElementById('date').value=today();renderAll();
-(async()=>{const {data}=await window.financeSupabase.auth.getSession();if(data.session)await enterApp(data.session.user);else{document.getElementById('authScreen').style.display='flex';document.getElementById('app').style.display='none';}})();
+(async()=>{
+  const {data,error}=await window.financeSupabase.auth.getSession();
+  if(error){
+    console.error(error);
+    document.getElementById('authScreen').style.display='flex';
+    document.getElementById('app').style.display='none';
+    return;
+  }
+  if(data.session&&data.session.user) await enterApp(data.session.user);
+  else{
+    document.getElementById('authScreen').style.display='flex';
+    document.getElementById('app').style.display='none';
+  }
+})();
 </script>
 </body>
 </html>
