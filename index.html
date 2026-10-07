@@ -30,7 +30,7 @@
     <span id="syncStatus" class="meta">☁️ Conectando...</span>
   </div>
   <div style="display:flex;gap:8px">
-    <button type="button" class="btn secondary" onclick="syncNow()">🔄 Sincronizar</button><button type="button" class="btn secondary" onclick="clearLocalCache()">🧹 Limpar aparelho</button>
+    <button type="button" class="btn secondary" onclick="syncNow()">🔄 Sincronizar</button><button type="button" class="btn secondary" onclick="clearLocalCache()">🧹 Limpar este aparelho</button>
     <button type="button" class="btn red" onclick="logout()">Sair</button>
   </div>
 </div>
@@ -350,10 +350,25 @@ async function syncNow(){
     toast('Não foi possível sincronizar: '+e.message);
   }
 }
-async function clearLocalCache(){
-  if(!confirm('Isso vai apagar somente os dados salvos neste navegador e recarregar os dados da nuvem. Continuar?'))return;
+function clearLocalCache(){
+  if(!confirm('Isso vai apagar somente os dados deste aparelho. Os dados da sua conta na nuvem NÃO serão apagados. Continuar?'))return;
+
+  // Do not call save() or cloudSave() here.
+  // This operation is local to this browser/device.
   localStorage.removeItem(LS);
-  location.reload();
+
+  state={
+    entries:[],
+    bills:[],
+    cats:['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros'],
+    planning:{
+      investment:{target:0,current:0,monthly:0,deadline:''},
+      emergency:{target:0,current:0,monthly:0,deadline:''}
+    }
+  };
+
+  renderAll();
+  toast('Dados locais apagados. A nuvem não foi alterada.');
 }
 async function enterApp(u){
   currentUser=u;
