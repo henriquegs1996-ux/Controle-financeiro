@@ -20,6 +20,7 @@
 <button data-page="lancamentos">🧾 Lançamentos</button>
 <button data-page="contas">📅 Contas</button>
 <button data-page="relatorios">📈 Relatórios</button>
+<button data-page="planejamento">🎯 Planejamento</button><button data-page="assistente">💬 Assistente</button>
 <button data-page="categorias">🏷️ Categorias</button>
 <button data-page="config">⚙️ Configurações</button>
 </nav>
@@ -71,6 +72,68 @@
 </div>
 </section>
 
+<section id="planejamento" class="page">
+<div class="top"><div><h1>Planejamento financeiro</h1><p>Planeje seus investimentos e sua reserva de emergência.</p></div><button class="btn" onclick="savePlanning()">💾 Salvar planejamento</button></div>
+<div class="grid3">
+<div class="panel"><div class="label">Investimentos</div><div id="invProgressValue" class="kpi blue">R$ 0,00</div><div class="track"><div id="invProgress" class="fill" style="width:0%"></div></div><div id="invProgressText" class="meta" style="margin-top:8px">0% da meta</div></div>
+<div class="panel"><div class="label">Reserva de emergência</div><div id="emgProgressValue" class="kpi green">R$ 0,00</div><div class="track"><div id="emgProgress" class="fill" style="width:0%"></div></div><div id="emgProgressText" class="meta" style="margin-top:8px">0% da meta</div></div>
+<div class="panel"><div class="label">Aporte mensal planejado</div><div id="planMonthly" class="kpi orange">R$ 0,00</div><div id="planMonths" class="meta">Defina suas metas abaixo.</div></div>
+</div>
+<div class="grid" style="margin-top:16px">
+<div class="panel"><h2>📈 Investimentos</h2><div class="formgrid">
+<div class="field"><label>Meta total (R$)</label><input id="invTarget" type="number" min="0" step=".01"></div>
+<div class="field"><label>Valor já investido (R$)</label><input id="invCurrent" type="number" min="0" step=".01"></div>
+<div class="field"><label>Aporte mensal (R$)</label><input id="invMonthly" type="number" min="0" step=".01"></div>
+<div class="field"><label>Prazo desejado</label><input id="invDeadline" type="month"></div>
+</div></div>
+<div class="panel"><h2>🛟 Reserva de emergência</h2><div class="formgrid">
+<div class="field"><label>Meta da reserva (R$)</label><input id="emgTarget" type="number" min="0" step=".01"></div>
+<div class="field"><label>Valor já reservado (R$)</label><input id="emgCurrent" type="number" min="0" step=".01"></div>
+<div class="field"><label>Aporte mensal (R$)</label><input id="emgMonthly" type="number" min="0" step=".01"></div>
+<div class="field"><label>Prazo desejado</label><input id="emgDeadline" type="month"></div>
+</div></div></div>
+<div class="panel" style="margin-top:16px">
+<h2>🤖 Planejado × Realizado</h2>
+<div class="grid3">
+<div class="card"><div class="label">Saldo disponível no mês</div><div id="planAvailable" class="num blue">R$ 0,00</div></div>
+<div class="card"><div class="label">Aporte planejado</div><div id="planTotal" class="num orange">R$ 0,00</div></div>
+<div class="card"><div class="label">Depois dos aportes</div><div id="planRemaining" class="num green">R$ 0,00</div></div>
+</div>
+<div id="planAlert" style="margin-top:14px"></div>
+<div class="grid3" style="margin-top:14px">
+<div class="panel"><h2>📈 Investimentos</h2><div class="meta">Planejado por mês</div><div id="invPlanMonth" class="kpi blue">R$ 0,00</div><div class="meta">Progresso acumulado</div><div id="invRealized" class="kpi">R$ 0,00</div></div>
+<div class="panel"><h2>🛟 Reserva</h2><div class="meta">Planejado por mês</div><div id="emgPlanMonth" class="kpi green">R$ 0,00</div><div class="meta">Progresso acumulado</div><div id="emgRealized" class="kpi">R$ 0,00</div></div>
+<div class="panel"><h2>📊 Distribuição</h2><div class="meta">Percentual do saldo destinado aos objetivos</div><div id="allocation" class="kpi orange">0%</div><div class="meta">Investimento + reserva</div></div>
+</div>
+</div>
+<div class="panel" style="margin-top:16px"><h2>📌 Visão do planejamento</h2><div id="planningSummary"></div></div>
+</section>
+
+<section id="assistente" class="page">
+<div class="top"><div><h1>💬 Assistente Financeiro</h1><p>Digite uma receita ou gasto em linguagem natural e o app prepara o lançamento.</p></div></div>
+<div class="panel">
+<h2>Como usar</h2>
+<div class="meta">Exemplos: <b>gastei 45 combustível</b> · <b>paguei 120 de luz</b> · <b>recebi 1500 de uma venda</b></div>
+<div id="assistantChat" style="margin-top:18px;max-height:330px;overflow:auto"></div>
+<div class="formgrid" style="margin-top:14px">
+<div class="field" style="grid-column:1/-1"><label>Mensagem</label><input id="assistantInput" placeholder="Ex.: gastei 85 no combustível"></div>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+<button class="btn" id="assistantSend">Interpretar lançamento</button>
+<button class="btn secondary" id="assistantExample">Usar exemplo</button>
+</div>
+</div>
+
+<div class="panel" style="margin-top:16px">
+<h2>🧠 Como o assistente interpreta</h2>
+<div class="grid3">
+<div class="card"><div class="label">Receitas</div><div class="meta">recebi · ganhei · entrou · venda</div></div>
+<div class="card"><div class="label">Despesas</div><div class="meta">gastei · paguei · comprei · despesa</div></div>
+<div class="card"><div class="label">Categorias</div><div class="meta">combustível · alimentação · luz · aluguel · transporte...</div></div>
+</div>
+<div class="meta" style="margin-top:14px">Nesta versão, o assistente registra diretamente no seu financeiro. A conexão com WhatsApp será feita posteriormente.</div>
+</div>
+</section>
 <section id="categorias" class="page">
 <div class="top"><div><h1>Categorias</h1><p>Organize seus lançamentos.</p></div></div>
 <div class="panel"><form id="catForm" class="toolbar"><input id="newCat" class="input" placeholder="Nome da nova categoria" required><button class="btn">+ Adicionar</button></form><div id="catList" style="margin-top:16px"></div></div>
@@ -108,6 +171,7 @@
 <script>
 const LS='finance_v2_data';
 let state=JSON.parse(localStorage.getItem(LS)||'null')||{entries:[],bills:[],cats:['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros']};
+if(!state.planning) state.planning={investment:{target:0,current:0,monthly:0,deadline:''},emergency:{target:0,current:0,monthly:0,deadline:''}};
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0);
 const today=()=>new Date().toISOString().slice(0,10);
 function save(){localStorage.setItem(LS,JSON.stringify(state));renderAll()}
@@ -130,7 +194,98 @@ function renderTable(){let q=(search.value||'').toLowerCase(),t=filterType.value
 function renderBills(){let pay=state.bills.filter(x=>x.type==='expense'&&x.status==='pending').reduce((s,x)=>s+x.value,0),rec=state.bills.filter(x=>x.type==='income'&&x.status==='pending').reduce((s,x)=>s+x.value,0),limit=new Date();limit.setDate(limit.getDate()+7);let week=state.bills.filter(x=>x.status==='pending'&&new Date(x.date+'T12:00:00')<=limit).reduce((s,x)=>s+x.value,0);payTotal.textContent=money(pay);receiveTotal.textContent=money(rec);weekTotal.textContent=money(week);let f=billFilter.value;let bs=state.bills.filter(x=>!f||x.status===f).sort((a,b)=>a.date.localeCompare(b.date));billBody.innerHTML=bs.map(x=>`<tr><td>${brDate(x.date)}</td><td><b>${esc(x.desc)}</b></td><td>${x.type==='expense'?'A pagar':'A receber'}</td><td class="${x.type==='expense'?'red':'green'}"><b>${money(x.value)}</b></td><td><span class="badge ${x.status}">${x.status==='paid'?'Pago':'Pendente'}</span></td><td><button class="btn secondary" onclick="toggleBill('${x.id}')">${x.status==='paid'?'Reabrir':'Marcar pago'}</button> <button class="btn red" onclick="delBill('${x.id}')">Excluir</button></td></tr>`).join('')||`<tr><td colspan="6" class="empty">Nenhuma conta cadastrada.</td></tr>`}
 function renderReport(){let m=reportMonth.value,es=selectedEntries(m),c=calc(es),all=es.length,r=all?((c.i-c.e)/c.i*100):0;rIncome.textContent=money(c.i);rExpense.textContent=money(c.e);rResult.textContent=money(c.i-c.e);let cats={};es.forEach(x=>cats[x.cat]=(cats[x.cat]||0)+(x.type==='expense'?-x.value:x.value));let arr=Object.entries(cats).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));reportCats.innerHTML=arr.map(([k,v])=>`<div class="row"><span>${esc(k)}</span><b class="${v>=0?'green':'red'}">${money(v)}</b></div>`).join('')||'<div class="empty">Sem dados.</div>';indicators.innerHTML=`<p><b>Margem do mês:</b> ${isFinite(r)?r.toFixed(1):0}%</p><p><b>Lançamentos:</b> ${all}</p><p><b>Média de despesa:</b> ${money(all?c.e/all:0)}</p>`}
 function renderCats(){catList.innerHTML=state.cats.map((x,i)=>`<div class="row"><span>🏷️ ${esc(x)}</span><button class="btn red" onclick="delCat(${i})">Excluir</button></div>`).join('')}
-function renderAll(){fillCats();renderDashboard();renderTable();renderBills();renderReport();renderCats()}
+function renderPlanning(){
+const p=state.planning,i=p.investment,e=p.emergency;
+invTarget.value=i.target||'';invCurrent.value=i.current||'';invMonthly.value=i.monthly||'';invDeadline.value=i.deadline||'';
+emgTarget.value=e.target||'';emgCurrent.value=e.current||'';emgMonthly.value=e.monthly||'';emgDeadline.value=e.deadline||'';
+const ip=i.target?Math.min(100,i.current/i.target*100):0,ep=e.target?Math.min(100,e.current/e.target*100):0;
+invProgress.style.width=ip+'%';emgProgress.style.width=ep+'%';
+invProgressValue.textContent=money(i.current);emgProgressValue.textContent=money(e.current);
+invProgressText.textContent=`${ip.toFixed(1)}% da meta · faltam ${money(Math.max(0,i.target-i.current))}`;
+emgProgressText.textContent=`${ep.toFixed(1)}% da meta · faltam ${money(Math.max(0,e.target-e.current))}`;
+const monthly=(+i.monthly||0)+(+e.monthly||0);planMonthly.textContent=money(monthly);
+const est=x=>x.monthly>0&&x.target>x.current?Math.ceil((x.target-x.current)/x.monthly):0;
+planMonths.textContent=`Investimentos: ${est(i)||'—'} mês(es) · Reserva: ${est(e)||'—'} mês(es)`;
+
+const m=document.getElementById('dashMonth')?.value || new Date().toISOString().slice(0,7);
+const es=selectedEntries(m), c=calc(es), available=Math.max(0,c.i-c.e);
+const remaining=available-monthly, allocation=available>0?(monthly/available*100):0;
+planAvailable.textContent=money(available);planTotal.textContent=money(monthly);planRemaining.textContent=money(remaining);
+invPlanMonth.textContent=money(i.monthly);emgPlanMonth.textContent=money(e.monthly);
+invRealized.textContent=money(i.current);emgRealized.textContent=money(e.current);
+allocation.textContent=(isFinite(allocation)?allocation:0).toFixed(1)+'%';
+if(monthly>available && monthly>0){
+ planAlert.innerHTML=`<div style="padding:13px;border-radius:10px;background:#fff3e4;color:#9a5b12"><b>⚠️ Atenção:</b> seu aporte mensal planejado (${money(monthly)}) é maior que o saldo disponível deste mês (${money(available)}). Faltariam ${money(monthly-available)}.</div>`;
+}else if(monthly>0){
+ planAlert.innerHTML=`<div style="padding:13px;border-radius:10px;background:#e8f8f1;color:#117653"><b>✅ Planejamento viável:</b> depois das despesas, você teria ${money(remaining)} livres após cumprir os aportes planejados.</div>`;
+}else{
+ planAlert.innerHTML=`<div style="padding:13px;border-radius:10px;background:#eaf0ff;color:#3157d5"><b>💡 Dica:</b> defina os aportes mensais para acompanhar quanto do seu saldo será destinado aos objetivos.</div>`;
+}
+planningSummary.innerHTML=`<div class="row"><div><div class="desc">Investimentos</div><div class="meta">Meta ${money(i.target)} · Atual ${money(i.current)} · Aporte ${money(i.monthly)}</div></div><b class="blue">${ip.toFixed(1)}%</b></div><div class="row"><div><div class="desc">Reserva de emergência</div><div class="meta">Meta ${money(e.target)} · Atual ${money(e.current)} · Aporte ${money(e.monthly)}</div></div><b class="green">${ep.toFixed(1)}%</b></div><div class="row"><div class="desc">Aporte mensal total</div><b class="orange">${money(monthly)}</b></div>`;
+}
+function savePlanning(){
+state.planning.investment={target:+invTarget.value||0,current:+invCurrent.value||0,monthly:+invMonthly.value||0,deadline:invDeadline.value||''};
+state.planning.emergency={target:+emgTarget.value||0,current:+emgCurrent.value||0,monthly:+emgMonthly.value||0,deadline:emgDeadline.value||''};
+save();toast('Planejamento salvo');
+}
+
+function assistantMoney(text){
+ let m=text.replace(/\s/g,'').match(/(?:r\$)?(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/i);
+ if(!m)return 0;
+ let s=m[1];
+ if(s.includes(',')&&s.includes('.')) s=s.replace(/\./g,'').replace(',','.');
+ else if(s.includes(',')) s=s.replace(',','.');
+ return parseFloat(s)||0;
+}
+function assistantCategory(text,type){
+ const t=text.toLowerCase();
+ const map=[
+  [['combustivel','combustível','gasolina','etanol','diesel'],'Combustível'],
+  [['almoço','almoco','jantar','comida','mercado','supermercado','lanche','alimentação','alimentacao'],'Alimentação'],
+  [['luz','energia','água','agua','internet','telefone','conta'],'Contas'],
+  [['aluguel','casa','moradia'],'Moradia'],
+  [['uber','onibus','ônibus','transporte','estacionamento','pedagio','pedágio'],'Transporte'],
+  [['manutenção','manutencao','oficina','conserto'],'Manutenção'],
+  [['venda','vendas','serviço','servico','cliente'],'Vendas'],
+  [['salário','salario','pagamento'],'Salário']
+ ];
+ for(const [words,cat] of map) if(words.some(w=>t.includes(w))) return cat;
+ return type==='income'?'Vendas':'Outros';
+}
+function assistantDescription(text){
+ return text.replace(/(?:r\$)?\s*\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?/ig,'').replace(/\s+/g,' ').trim().replace(/^(de|do|da|em|no|na)\s+/i,'').slice(0,80) || 'Lançamento via assistente';
+}
+function assistantParse(text){
+ const t=text.toLowerCase().trim(), value=assistantMoney(t);
+ if(!value)return null;
+ const income=/\b(recebi|receita|ganhei|entrou|vendi|venda|salário|salario|pagamento recebido)\b/i.test(t);
+ const expense=/\b(gastei|gasto|paguei|pago|comprei|compra|despesa|saída|saida)\b/i.test(t);
+ if(!income&&!expense)return null;
+ const type=income?'income':'expense';
+ return {type,value,cat:assistantCategory(t,type),desc:assistantDescription(text),date:today(),status:'paid',method:'Assistente'};
+}
+function assistantBubble(who,text,good=false){
+ const el=document.createElement('div');
+ el.style.cssText='margin:8px 0;padding:11px 13px;border-radius:12px;background:'+(who==='Você'?'#f0f3f7':'#e8f8f1')+';color:#202733';
+ el.innerHTML='<b>'+who+':</b> '+text;
+ assistantChat.appendChild(el); assistantChat.scrollTop=assistantChat.scrollHeight;
+}
+function processAssistant(){
+ const text=assistantInput.value.trim(); if(!text)return;
+ assistantBubble('Você',text);
+ const r=assistantParse(text);
+ if(!r){
+  assistantBubble('Assistente','Não consegui identificar uma receita ou gasto. Tente: <b>gastei 50 combustível</b> ou <b>recebi 1200 de uma venda</b>.');
+  return;
+ }
+ const ok=confirm(`Registrar ${r.type==='income'?'RECEITA':'DESPESA'} de ${money(r.value)} em ${r.cat}?\\nDescrição: ${r.desc}`);
+ if(!ok){assistantBubble('Assistente','Lançamento cancelado.');return;}
+ state.entries.push({id:Date.now(),...r});
+ save();
+ assistantBubble('Assistente',`✅ Registrado: <b>${r.type==='income'?'Receita':'Despesa'} ${money(r.value)}</b> · ${r.cat}.`);
+ assistantInput.value='';
+}
+function renderAll(){fillCats();renderDashboard();renderPlanning();renderTable();renderBills();renderReport();renderCats()}
 function openModal(bill=false){modal.classList.add('show');isBill.value=bill?'1':'0';modalTitle.textContent=bill?'Nova conta':'Novo lançamento';date.value=today();value.value='';desc.value='';status.value=bill?'pending':'paid';type.value=bill?'expense':'income'}
 function closeModal(){modal.classList.remove('show')}
 entryForm.onsubmit=e=>{e.preventDefault();let obj={id:Date.now().toString(),type:type.value,date:date.value,value:+value.value,desc:desc.value.trim(),cat:cat.value,status:status.value,method:method.value};if(isBill.value==='1'){state.bills.push(obj);toast('Conta adicionada')}else{state.entries.push(obj);toast('Lançamento salvo')}save();closeModal()}
