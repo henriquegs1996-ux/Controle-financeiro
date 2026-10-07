@@ -337,6 +337,10 @@ async function cloudSave(){
 }
 async function syncNow(){
   if(!currentUser){authMessage('Entre na sua conta primeiro.');return;}
+  if(syncBusy){
+    toast('Aguarde a operação atual terminar.');
+    return;
+  }
   try{
     await loadCloud();
     toast('Sincronização concluída');
@@ -508,7 +512,72 @@ function exportCSV(){let rows=[['Data','Descrição','Categoria','Tipo','Valor',
 function backup(){download('backup-meu-financeiro.json','application/json',JSON.stringify(state,null,2))}
 restore.onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let o=JSON.parse(await f.text());if(o.entries&&o.bills&&o.cats){state=o;save();toast('Backup restaurado')}}catch{alert('Arquivo de backup inválido.')}e.target.value=''}
 function download(name,type,content){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
-function clearAll(){if(confirm('Isso apagará TODOS os dados deste navegador. Continuar?')){state={entries:[],bills:[],cats:['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros']};save();toast('Dados apagados')}}
+async function clearAll(){
+  if(!confirm('Isso apagará TODOS os dados financeiros desta conta, no celular/computador e na nuvem. Esta ação não pode ser desfeita. Continuar?'))return;
+
+  if(!currentUser){
+    state={
+      entries:[],
+      bills:[],
+      cats:['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros'],
+      planning:{investment:{target:0,current:0,monthly:0,deadline:''},emergency:{target:0,current:0,monthly:0,deadline:''}}
+    };
+    localStorage.setItem(LS,JSON.stringify(state));
+    renderAll();
+    toast('Dados deste aparelho apagados');
+    return;
+  }
+
+  try{
+    syncBusy=true;
+    setSyncStatus('Apagando...',false);
+
+    const uidv=currentUser.id;
+
+    // Primeiro apaga os dados do usuário na NUVEM.
+    const e=await window.financeSupabase
+      .from('finance_entries')
+      .delete()
+      .eq('user_id',uidv);
+    if(e.error)throw new Error('Lançamentos: '+e.error.message);
+
+    const b=await window.financeSupabase
+      .from('finance_bills')
+      .delete()
+      .eq('user_id',uidv);
+    if(b.error)throw new Error('Contas: '+b.error.message);
+
+    const s=await window.financeSupabase
+      .from('finance_settings')
+      .delete()
+      .eq('user_id',uidv);
+    if(s.error)throw new Error('Configurações: '+s.error.message);
+
+    // Somente depois de confirmar a exclusão na nuvem,
+    // limpa o estado local e o localStorage.
+    state={
+      entries:[],
+      bills:[],
+      cats:['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros'],
+      planning:{
+        investment:{target:0,current:0,monthly:0,deadline:''},
+        emergency:{target:0,current:0,monthly:0,deadline:''}
+      }
+    };
+
+    localStorage.setItem(LS,JSON.stringify(state));
+    renderAll();
+    cloudReady=true;
+    setSyncStatus('Sincronizado — vazio',true);
+    toast('Todos os dados foram apagados');
+  }catch(e){
+    console.error('CLEAR ALL ERROR',e);
+    setSyncStatus('Erro ao apagar',false);
+    toast('Não foi possível apagar: '+e.message);
+  }finally{
+    syncBusy=false;
+  }
+}
 function toast(t){toastEl.textContent=t;toastEl.style.display='block';setTimeout(()=>toastEl.style.display='none',1800)}
 const toastEl=document.getElementById('toast');
 ['dashMonth','reportMonth','search','filterType','filterCat','filterDate','billFilter'].forEach(id=>document.getElementById(id).addEventListener('input',renderAll));
