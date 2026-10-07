@@ -19,7 +19,6 @@
 <div class="auth-box">
 <h1>💰 Meu Financeiro</h1>
 <p><b>Sincronização online:</b> entre com sua conta para usar o mesmo financeiro no computador e no celular.</p>
-<div class="field"><label>Chave pública do Supabase</label><input id="supabaseKeyInput" type="text" placeholder="sb_publishable_..." autocomplete="off"></div>
 <div class="field"><label>E-mail</label><input id="authEmail" type="email" placeholder="seu@email.com" autocomplete="email"></div>
 <div class="field"><label>Senha</label><input id="authPassword" type="password" placeholder="Sua senha" autocomplete="current-password"></div>
 <div class="auth-actions"><button class="btn" id="loginBtn">Entrar</button><button class="btn secondary" id="signupBtn">Criar conta</button></div>
@@ -187,8 +186,8 @@
 <div id="toast" class="toast"></div>
 <script>
 const LS='finance_v2_data';
-const CFG='finance_supabase_config';
 const SUPABASE_URL='https://qtjfsrqkwtkpapqknikt.supabase.co';
+const SUPABASE_KEY='sb_publishable_Os-1E8BDOH1GtXT8E4I7Pg_AerAvOVN';
 const DEFAULT_CATS=['Vendas','Salário','Alimentação','Combustível','Moradia','Contas','Manutenção','Transporte','Outros'];
 let localState=JSON.parse(localStorage.getItem(LS)||'null')||{entries:[],bills:[],cats:DEFAULT_CATS.slice(),planning:{investment:{target:0,current:0,monthly:0,deadline:''},emergency:{target:0,current:0,monthly:0,deadline:''}}};
 if(!localState.planning)localState.planning={investment:{target:0,current:0,monthly:0,deadline:''},emergency:{target:0,current:0,monthly:0,deadline:''}};
@@ -198,14 +197,107 @@ const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).
 const today=()=>new Date().toISOString().slice(0,10);
 function setAuthStatus(msg,ok=false){const e=document.getElementById('authStatus');e.textContent=msg;e.style.display='block';e.style.background=ok?'#e8f8f1':'#feecec';e.style.color=ok?'#117653':'#a33';}
 function syncStatus(msg,kind=''){const e=document.getElementById('syncBar');e.textContent=msg;e.className='syncbar '+kind;}
-function getConfig(){try{return JSON.parse(localStorage.getItem(CFG)||'null')||{}}catch{return {}}}
-function saveConfig(){const key=document.getElementById('supabaseKeyInput').value.trim();if(!key){setAuthStatus('Cole a chave pública do Supabase.');return false}localStorage.setItem(CFG,JSON.stringify({key}));return true}
-function initSupabase(){const cfg=getConfig();if(!cfg.key||cfg.key.startsWith('__'))return false;try{supabase=window.supabase.createClient(SUPABASE_URL,cfg.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});return true}catch(e){setAuthStatus('Não foi possível iniciar o Supabase: '+e.message);return false}}
-async function bootAuth(){const cfg=getConfig();if(cfg.key)document.getElementById('supabaseKeyInput').value=cfg.key; if(!initSupabase()){syncStatus('⚙️ Configure a chave pública');return;}
+function initSupabase(){
+  try{
+    supabase=window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_KEY,
+      {
+        auth:{
+          persistSession:true,
+          autoRefreshToken:true,
+          detectSessionInUrl:true
+        }
+      }
+    );
+    return true;
+  }catch(e){
+    console.error(e);
+    setAuthStatus('Não foi possível iniciar o Supabase: '+e.message);
+    return false;
+  }
+}
+async function bootAuth(){
+  if(!initSupabase()){
+    syncStatus('⚠️ Erro de conexão','err');
+    return;
+  }
+
+  const {data:{session},error}=await supabase.auth.getSession();
+
+  if(error){
+    console.error(error);
+    syncStatus('⚠️ Erro de autenticação','err');
+    return;
+  }
+
+  if(session?.user){
+    await enterApp(session.user);
+  }else{
+    document.getElementById('authOverlay').style.display='flex';
+    syncStatus('🔐 Faça login');
+  }
+
+  supabase.auth.onAuthStateChange(async(_event,session)=>{
+    if(session?.user){
+      await enterApp(session.user);
+    }else{
+      currentUser=null;
+      document.getElementById('authOverlay').style.display='flex';
+      syncStatus('🔐 Faça login');
+    }
+  });
+}{const cfg=getConfig();if(cfg.key)document.getElementById('supabaseKeyInput').value=cfg.key; if(!initSupabase()){syncStatus('⚙️ Configure a chave pública');return;}
  const {data:{session}}=await supabase.auth.getSession(); if(session?.user){await enterApp(session.user);return;} document.getElementById('authOverlay').style.display='flex';syncStatus('🔐 Faça login');
  supabase.auth.onAuthStateChange(async(_event,session)=>{if(session?.user){await enterApp(session.user)}else{currentUser=null;document.getElementById('authOverlay').style.display='flex';syncStatus('🔐 Faça login')}});
 }
-async function authAction(mode){if(!saveConfig())return;if(!initSupabase())return;const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;if(!email||!password){setAuthStatus('Informe e-mail e senha.');return}setAuthStatus(mode==='login'?'Entrando...':'Criando conta...',true);let r=mode==='login'?await supabase.auth.signInWithPassword({email,password}):await supabase.auth.signUp({email,password});if(r.error){setAuthStatus(r.error.message);return}if(mode==='signup'&&!r.data.session){setAuthStatus('Conta criada. Confirme o e-mail recebido e depois entre.',true);return}if(r.data.user)await enterApp(r.data.user)}
+async function authAction(mode){
+  if(!initSupabase())return;
+
+  const email=document.getElementById('authEmail').value.trim();
+  const password=document.getElementById('authPassword').value;
+
+  if(!email||!password){
+    setAuthStatus('Informe e-mail e senha.');
+    return;
+  }
+
+  setAuthStatus(
+    mode==='login'?'Entrando...':'Criando conta...',
+    true
+  );
+
+  let r;
+
+  if(mode==='login'){
+    r=await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+  }else{
+    r=await supabase.auth.signUp({
+      email,
+      password
+    });
+  }
+
+  if(r.error){
+    setAuthStatus(r.error.message);
+    return;
+  }
+
+  if(mode==='signup'&&!r.data.session){
+    setAuthStatus(
+      'Conta criada. Confirme o e-mail recebido e depois entre.',
+      true
+    );
+    return;
+  }
+
+  if(r.data.user){
+    await enterApp(r.data.user);
+  }
+}const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;if(!email||!password){setAuthStatus('Informe e-mail e senha.');return}setAuthStatus(mode==='login'?'Entrando...':'Criando conta...',true);let r=mode==='login'?await supabase.auth.signInWithPassword({email,password}):await supabase.auth.signUp({email,password});if(r.error){setAuthStatus(r.error.message);return}if(mode==='signup'&&!r.data.session){setAuthStatus('Conta criada. Confirme o e-mail recebido e depois entre.',true);return}if(r.data.user)await enterApp(r.data.user)}
 document.getElementById('loginBtn').onclick=()=>authAction('login');document.getElementById('signupBtn').onclick=()=>authAction('signup');
 async function enterApp(user){currentUser=user;document.getElementById('authOverlay').style.display='none';document.getElementById('accountInfo').textContent=user.email||'Conta conectada';syncStatus('☁️ Sincronizando...');await loadCloud();renderAll();syncStatus('☁️ Sincronizado','ok')}
 async function logout(){if(supabase)await supabase.auth.signOut();}
