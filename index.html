@@ -233,6 +233,12 @@ body,#authScreen{background:var(--bg)!important;color:var(--text)!important}
 <div class="field"><label>Categoria</label><select id="cat"></select></div>
 <div class="field" id="statusField"><label>Status</label><select id="status"><option value="paid">Pago/Recebido</option><option value="pending">Pendente</option></select></div>
 <div class="field"><label>Forma de pagamento</label><select id="method"><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Boleto</option><option>Transferência</option><option>Outro</option></select></div>
+<div class="field full" id="installmentToggleField"><label style="display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text);"><input id="isInstallment" type="checkbox" style="width:auto"> Registrar como compra parcelada</label></div>
+<div class="full" id="installmentFields" style="display:none;border:1px solid var(--line);border-radius:10px;padding:12px">
+ <div class="formgrid"><div class="field"><label>Quantidade de parcelas</label><input id="installmentCount" type="number" min="2" max="120" step="1" value="2"></div><div class="field"><label>Vencimento da 1ª parcela</label><input id="firstDueDate" type="date"></div></div>
+ <div id="installmentPreview" class="notice" style="margin-top:10px">Informe o valor total, a quantidade e o primeiro vencimento.</div>
+ <p class="meta" style="margin:9px 0 0">As parcelas serão criadas em Contas e também aparecerão em Lançamentos. Cada parcela terá seu próprio vencimento e status, sem duplicar o total nos relatórios.</p>
+</div>
 <div class="full actions" style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn secondary" onclick="closeModal()">Cancelar</button><button class="btn">Salvar</button></div>
 </form></div></div>
 <div id="toast" class="toast"></div>
@@ -549,8 +555,11 @@ function brDate(s){return new Date(s+'T12:00:00').toLocaleDateString('pt-BR')}
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function renderTable(){
  let q=(search.value||'').toLowerCase(),t=filterType.value,c=filterCat.value,m=filterDate.value;
- let es=state.entries.filter(x=>(!q||String(x.desc||'').toLowerCase().includes(q))&&(!t||x.type===t)&&(!c||x.cat===c)&&(!m||String(x.date||'').startsWith(m))).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
- tableBody.innerHTML=es.map(x=>`<tr><td>${brDate(x.date)}</td><td><b>${esc(x.desc)}</b></td><td>${esc(x.cat)}</td><td><span class="badge ${x.type==='income'?'income':'expense'}">${x.type==='income'?'Receita':'Despesa'}</span></td><td class="${x.type==='income'?'green':'red'}"><b>${money(x.value)}</b></td><td><span class="badge ${x.status==='paid'?'paid':'pending'}">${x.status==='paid'?(x.type==='income'?'Recebido':'Pago'):'Pendente'}</span></td><td><div class="status-cell"><button class="btn secondary status-toggle" onclick="openEdit('${x.id}',false)">Editar</button><button class="btn secondary status-toggle" onclick="toggleEntry('${x.id}')">${x.status==='paid'?'Tornar pendente':'Marcar pago'}</button><button class="btn red status-toggle" onclick="delEntry('${x.id}')">Excluir</button></div></td></tr>`).join('')||`<tr><td colspan="7" class="empty">Nenhum lançamento encontrado.</td></tr>`;
+ // Lançamentos e contas aparecem juntos, sem criar uma segunda cópia dos registros.
+ let es=[...(state.entries||[]).map(x=>({...x,_source:'entry'})),...(state.bills||[]).map(x=>({...x,_source:'bill'}))]
+  .filter(x=>(!q||String(x.desc||'').toLowerCase().includes(q))&&(!t||normalizeType(x.type)===t)&&(!c||x.cat===c)&&(!m||String(x.date||'').startsWith(m)))
+  .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+ tableBody.innerHTML=es.map(x=>{const isBill=x._source==='bill',typ=normalizeType(x.type),id=String(x.id).replace(/'/g,'');return `<tr><td>${brDate(x.date)}</td><td><b>${esc(x.desc)}</b>${isBill?'<div class="meta">Conta / parcela</div>':''}</td><td>${esc(x.cat)}</td><td><span class="badge ${typ==='income'?'income':'expense'}">${typ==='income'?(isBill?'A receber':'Receita'):(isBill?'A pagar':'Despesa')}</span></td><td class="${typ==='income'?'green':'red'}"><b>${money(x.value)}</b></td><td><span class="badge ${x.status==='paid'?'paid':'pending'}">${x.status==='paid'?(typ==='income'?'Pago/recebido':'Pago'):'Pendente'}</span></td><td><div class="status-cell"><button class="btn secondary status-toggle" onclick="openEdit('${id}',${isBill})">Editar</button><button class="btn secondary status-toggle" onclick="${isBill?'toggleBill':'toggleEntry'}('${id}')">${x.status==='paid'?'Tornar pendente':'Marcar pago'}</button><button class="btn red status-toggle" onclick="${isBill?'delBill':'delEntry'}('${id}')">Excluir</button></div></td></tr>`}).join('')||`<tr><td colspan="7" class="empty">Nenhum lançamento encontrado.</td></tr>`;
 }
 function renderBills(){
  const pay=state.bills.filter(x=>x.type==='expense'&&x.status==='pending').reduce((s,x)=>s+(Number(x.value)||0),0),rec=state.bills.filter(x=>x.type==='income'&&x.status==='pending').reduce((s,x)=>s+(Number(x.value)||0),0);
@@ -722,11 +731,48 @@ function processAssistant(){
  assistantInput.value='';
 }
 function renderAll(){fillCats();renderDashboard();renderPlanning();renderTable();renderBills();renderReport();renderCats()}
-function openModal(bill=false){modal.classList.add('show');isBill.value=bill?'1':'0';editId.value='';modalTitle.textContent=bill?'Nova conta':'Novo lançamento';date.value=today();value.value='';desc.value='';status.value=bill?'pending':'paid';type.value=bill?'expense':'income';if(statusField)statusField.style.display='block'}
-function openEdit(id,bill=false){const list=bill?state.bills:state.entries,x=list.find(v=>String(v.id)===String(id));if(!x)return;openModal(bill);editId.value=x.id;modalTitle.textContent=bill?'Editar conta':'Editar lançamento';type.value=normalizeType(x.type);date.value=x.date||today();value.value=Number(x.value)||0;desc.value=x.desc||x.description||'';status.value=x.status||'pending';method.value=x.method||'Outro';if(![...cat.options].some(o=>o.value===x.cat)) {const opt=document.createElement('option');opt.value=x.cat||'Outros';opt.textContent=x.cat||'Outros';cat.appendChild(opt)}cat.value=x.cat||'Outros'}
+function updateInstallmentUI(){
+ const enabled=document.getElementById('isInstallment'),fields=document.getElementById('installmentFields'),toggle=document.getElementById('installmentToggleField');
+ const show=!!enabled&&enabled.checked&&type.value==='expense'&&!editId.value;
+ if(fields)fields.style.display=show?'block':'none';
+ if(toggle)toggle.style.display=(!editId.value&&type.value==='expense')?'block':'none';
+ updateInstallmentPreview();
+}
+function addMonthsToISO(iso,offset){const parts=String(iso||today()).split('-').map(Number),y=parts[0],m=parts[1],d=parts[2],first=new Date(y,m-1+offset,1),last=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();return `${first.getFullYear()}-${String(first.getMonth()+1).padStart(2,'0')}-${String(Math.min(d,last)).padStart(2,'0')}`}
+function updateInstallmentPreview(){
+ const preview=document.getElementById('installmentPreview');if(!preview)return;
+ const total=Math.round((Number(value.value)||0)*100),count=Math.floor(Number(document.getElementById('installmentCount').value)||0),first=document.getElementById('firstDueDate').value;
+ if(total<=0||count<2||count>120||!first){preview.textContent='Informe o valor total, uma quantidade entre 2 e 120 parcelas e a data da primeira parcela.';return}
+ const base=Math.floor(total/count),rest=total-base*count,firstValue=(base+(rest>0?1:0))/100;
+ preview.textContent=`Total: ${money(total/100)} · ${count} parcelas · ${money(firstValue)} na primeira parcela${rest>1?' (as primeiras podem variar alguns centavos)':''}. Primeiro vencimento: ${brDate(first)}.`;
+}
+function openModal(bill=false){modal.classList.add('show');isBill.value=bill?'1':'0';editId.value='';modalTitle.textContent=bill?'Nova conta':'Novo lançamento';date.value=today();value.value='';desc.value='';status.value=bill?'pending':'paid';type.value=bill?'expense':'income';method.value='Pix';document.getElementById('isInstallment').checked=false;document.getElementById('installmentCount').value='2';document.getElementById('firstDueDate').value=today();if(statusField)statusField.style.display='block';updateInstallmentUI()}
+function openEdit(id,bill=false){const list=bill?state.bills:state.entries,x=list.find(v=>String(v.id)===String(id));if(!x)return;openModal(bill);editId.value=x.id;modalTitle.textContent=bill?'Editar conta':'Editar lançamento';type.value=normalizeType(x.type);date.value=x.date||today();value.value=Number(x.value)||0;desc.value=x.desc||x.description||'';status.value=x.status||'pending';method.value=x.method||'Outro';if(![...cat.options].some(o=>o.value===x.cat)){const opt=document.createElement('option');opt.value=x.cat||'Outros';opt.textContent=x.cat||'Outros';cat.appendChild(opt)}cat.value=x.cat||'Outros';updateInstallmentUI()}
 function closeModal(){modal.classList.remove('show')}
+document.getElementById('isInstallment').addEventListener('change',updateInstallmentUI);
+type.addEventListener('change',updateInstallmentUI);
+value.addEventListener('input',updateInstallmentPreview);
+document.getElementById('installmentCount').addEventListener('input',updateInstallmentPreview);
+document.getElementById('firstDueDate').addEventListener('change',updateInstallmentPreview);
 function toggleEntry(id){const x=state.entries.find(v=>String(v.id)===String(id));if(x){x.status=x.status==='paid'?'pending':'paid';save();toast(x.status==='paid'?'Lançamento marcado como pago/recebido':'Lançamento marcado como pendente')}}
-entryForm.onsubmit=e=>{e.preventDefault();const bill=isBill.value==='1',id=editId.value;let obj={id:id||uid(),type:type.value,date:date.value,value:Math.round((+value.value||0)*100)/100,desc:desc.value.trim(),cat:cat.value,status:status.value,method:method.value};if(!obj.desc||!obj.date||obj.value<=0){toast('Confira descrição, data e valor.');return}const list=bill?state.bills:state.entries;if(id){const idx=list.findIndex(x=>String(x.id)===String(id));if(idx>=0)list[idx]={...list[idx],...obj};toast(bill?'Conta atualizada':'Lançamento atualizado')}else{list.push(obj);toast(bill?'Conta adicionada':'Lançamento salvo')}save();closeModal()}
+entryForm.onsubmit=e=>{
+ e.preventDefault();const bill=isBill.value==='1',id=editId.value;
+ let obj={id:id||uid(),type:type.value,date:date.value,value:Math.round((+value.value||0)*100)/100,desc:desc.value.trim(),cat:cat.value,status:status.value,method:method.value};
+ if(!obj.desc||!obj.date||obj.value<=0){toast('Confira descrição, data e valor.');return}
+ const isInstallment=document.getElementById('isInstallment').checked;
+ if(isInstallment&&!id){
+  const count=Math.floor(Number(document.getElementById('installmentCount').value)||0),first=document.getElementById('firstDueDate').value;
+  if(obj.type!=='expense'){toast('Parcelamento disponível somente para despesas/contas a pagar.');return}
+  if(count<2||count>120||!first){toast('Informe de 2 a 120 parcelas e a data da primeira parcela.');return}
+  const totalCents=Math.round(obj.value*100),base=Math.floor(totalCents/count),rest=totalCents-base*count;
+  for(let i=0;i<count;i++){const cents=base+(i<rest?1:0);state.bills.push({id:uid(),type:'expense',date:addMonthsToISO(first,i),value:cents/100,desc:`${obj.desc} — Parcela ${i+1}/${count}`,cat:obj.cat,status:'pending',method:obj.method})}
+  save();closeModal();toast(`${count} parcelas criadas em Contas e Lançamentos.`);return;
+ }
+ const list=bill?state.bills:state.entries;
+ if(id){const idx=list.findIndex(x=>String(x.id)===String(id));if(idx>=0)list[idx]={...list[idx],...obj};toast(bill?'Conta atualizada':'Lançamento atualizado')}
+ else{list.push(obj);toast(bill?'Conta adicionada':'Lançamento salvo')}
+ save();closeModal()
+}
 function delEntry(id){if(confirm('Excluir este lançamento?')){state.entries=state.entries.filter(x=>x.id!==id);save()}}
 function toggleBill(id){let x=state.bills.find(x=>x.id===id);if(x){x.status=x.status==='paid'?'pending':'paid';save()}}
 function delBill(id){if(confirm('Excluir esta conta?')){state.bills=state.bills.filter(x=>x.id!==id);save()}}
