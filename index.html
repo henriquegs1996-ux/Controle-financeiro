@@ -131,6 +131,7 @@ body,#authScreen{background:var(--bg)!important;color:var(--text)!important}
 <div class="panel"><div class="label">Despesas pagas</div><div id="rExpense" class="kpi red">R$ 0,00</div></div>
 <div class="panel"><div class="label">Resultado do mês</div><div id="rResult" class="kpi blue">R$ 0,00</div></div>
 </div>
+<div class="panel" style="margin-top:12px"><div class="label">Parcelas pendentes previstas neste mês</div><div id="rInstallmentsPending" class="kpi red">R$ 0,00</div><p class="meta">Soma somente as parcelas ainda pendentes com vencimento no mês selecionado. Elas não são somadas às despesas pagas.</p></div>
 <div class="grid">
 <div class="panel"><h2>Resumo por categoria</h2><div id="reportCats"></div></div>
 <div class="panel"><h2>Indicadores</h2><div id="indicators"></div></div>
@@ -572,11 +573,16 @@ function renderBills(){
 function renderReport(){
  const m=reportMonth.value,es=selectedEntries(m),c=calc(es),expenseCount=es.filter(x=>normalizeType(x.type)==='expense').length;
  rIncome.textContent=money(c.i);rExpense.textContent=money(c.e);rResult.textContent=money(c.i-c.e);
+ const pendingInstallments=(state.bills||[]).filter(x=>x.status==='pending'&&normalizeType(x.type)==='expense'&&String(x.date||'').slice(0,7)===m&&/\bParcela\s+\d+\s*\//i.test(String(x.desc||x.description||'')));
+ const pendingInstallmentTotal=pendingInstallments.reduce((sum,x)=>sum+(Number(x.value)||0),0);
+ const pendingInstallmentEl=document.getElementById('rInstallmentsPending');if(pendingInstallmentEl)pendingInstallmentEl.textContent=money(pendingInstallmentTotal);
  const allPaid=[...(state.entries||[]),...(state.bills||[])].filter(x=>x.status==='paid'&&String(x.date||'')<=today()).map(x=>({...x,type:normalizeType(x.type),value:Number(x.value)||0}));
  const current=calc(allPaid);let currentBox=document.getElementById('rCurrentBalance');if(!currentBox){const panel=document.createElement('div');panel.className='panel';panel.innerHTML='<div class="label">Saldo acumulado até hoje</div><div id="rCurrentBalance" class="kpi blue">R$ 0,00</div>';document.querySelector('#relatorios .grid3').appendChild(panel);currentBox=document.getElementById('rCurrentBalance')}currentBox.textContent=money(current.i-current.e);
  const labelMonth=new Date(m+'-15T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});document.getElementById('reportMeta').textContent=`Período: ${labelMonth} · Gerado em ${new Date().toLocaleString('pt-BR')}`;
- let cats={};es.forEach(x=>{const k=x.cat||'Outros';if(!cats[k])cats[k]={income:0,expense:0};cats[k][normalizeType(x.type)]+=(Number(x.value)||0)});let arr=Object.entries(cats).sort((a,b)=>(b[1].expense+b[1].income)-(a[1].expense+a[1].income));
- reportCats.innerHTML=arr.map(([k,v])=>`<div class="row"><div><b>${esc(k)}</b><div class="meta">Receitas: ${money(v.income)} · Despesas: ${money(v.expense)}</div></div><b class="${v.income-v.expense<0?'red':'green'}">${money(v.income-v.expense)}</b></div>`).join('')||'<div class="empty">Sem dados no período.</div>';
+ let cats={};es.forEach(x=>{const k=x.cat||'Outros';if(!cats[k])cats[k]={income:0,expense:0};cats[k][normalizeType(x.type)]+=(Number(x.value)||0)});
+ pendingInstallments.forEach(x=>{const k=x.cat||x.category||'Outros';if(!cats[k])cats[k]={income:0,expense:0};cats[k].expense+=(Number(x.value)||0)});
+ let arr=Object.entries(cats).sort((a,b)=>(b[1].expense+b[1].income)-(a[1].expense+a[1].income));
+ reportCats.innerHTML=arr.map(([k,v])=>`<div class="row"><div><b>${esc(k)}</b><div class="meta">Receitas recebidas: ${money(v.income)} · Despesas pagas + parcelas pendentes: ${money(v.expense)}</div></div><b class="${v.income-v.expense<0?'red':'green'}">${money(v.income-v.expense)}</b></div>`).join('')||'<div class="empty">Sem dados no período.</div>';
  const inMonth=x=>String(x.date||'').slice(0,7)===m;
  const pendingEntries=(state.entries||[]).filter(x=>x.status==='pending'&&inMonth(x)),pendingBills=(state.bills||[]).filter(x=>x.status==='pending'&&inMonth(x));
  const paidEntries=(state.entries||[]).filter(x=>x.status==='paid'&&inMonth(x)),paidBills=(state.bills||[]).filter(x=>x.status==='paid'&&inMonth(x));
